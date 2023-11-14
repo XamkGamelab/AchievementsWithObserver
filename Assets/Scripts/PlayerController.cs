@@ -58,8 +58,17 @@ public class PlayerController : MonoBehaviour
     }
 
     private void OnTriggerEnter(Collider other) {
-        Destroy(other.gameObject); // Destroy the coin!
-    }
+
+        if (other.CompareTag("Coin"))
+        {
+            Destroy(other.gameObject); // Destroy the coin!
+        }
+        else if (other.CompareTag("Enemy"))
+        {  
+            Destroy(other.gameObject); // Destroy the enemy!
+        }
+
+    } //*
 
     // Start is called before the first frame update
     void Start()
