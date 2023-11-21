@@ -1,16 +1,187 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting.FullSerializer;
 using UnityEngine;
 
 public class PlayerController : MonoBehaviour
 {
-    
+    public enum PlayerState
+    {
+        STANDING,
+        JUMPING,
+        CROUCHING, 
+        SPECIAL_ABILITY
+    }
+   
+
+    public PlayerState my_state = PlayerState.STANDING;
+
+    void handleInput()
+    {
+        switch (my_state)
+        {
+            case PlayerState.STANDING:
+                if (Input.GetKeyDown(KeyCode.Space))
+                {
+                    Jump();
+                    my_state = PlayerState.JUMPING;
+
+                }
+                else if (Input.GetKeyDown(KeyCode.LeftControl))
+                {
+                    my_state = PlayerState.CROUCHING;
+                    StartCoroutine(GetSmall());
+                }
+                break;
+
+            case PlayerState.JUMPING:
+                // Check to see if Y-value has returned to 1, then change to standing state
+                StartCoroutine(CheckYWithDelay()); // done inside a coroutine to force delay to an approximation
+                break;
+
+            case PlayerState.CROUCHING:
+                if (Input.GetKeyUp(KeyCode.LeftControl))
+                {
+                    my_state = PlayerState.STANDING;
+                    StartCoroutine(ResetScale());
+                }
+                break;
+
+                case PlayerState.SPECIAL_ABILITY:
+                SpecialAbilityEffect(10.0f, 0.2f);
+             
+                break;
+
+
+        }
+    }
+
+    IEnumerator GetSmall()
+    {
+        Vector3 originalScale = transform.localScale;
+        Vector3 targetScale = new Vector3(originalScale.x, originalScale.y / 3f, originalScale.z); // Scale down in the Y dimension
+
+        float duration = 0.3f; // Adjust the duration as needed
+        float elapsedTime = 0f;
+
+        while (elapsedTime < duration)
+        {
+            transform.localScale = Vector3.Lerp(originalScale, targetScale, elapsedTime / duration);
+            elapsedTime += Time.deltaTime;
+            yield return null;
+        }
+
+        transform.localScale = targetScale; // Ensure the scale is exactly the target scale
+    }
+
+    IEnumerator ResetScale()
+    {
+        Vector3 originalScale = transform.localScale;
+        Vector3 targetScale = Vector3.one; // Reset to the original scale
+
+        float duration = 0.3f; // Adjust the duration as needed
+        float elapsedTime = 0f;
+
+        while (elapsedTime < duration)
+        {
+            transform.localScale = Vector3.Lerp(originalScale, targetScale, elapsedTime / duration);
+            elapsedTime += Time.deltaTime;
+            yield return null;
+        }
+
+        transform.localScale = targetScale; // Ensure the scale is exactly the target scale
+    }
+    IEnumerator CheckYWithDelay()
+    {
+        yield return new WaitForSeconds(0.1f); 
+        if (Mathf.Approximately(transform.position.y, 1.00f))
+        {
+            my_state = PlayerState.STANDING;
+        }
+    }
+
+
+
+    //public PlayerState my_state = PlayerState.JUMPING;
+
+    //public PlayerState my_state = PlayerState.CROUCHING;
+
     Rigidbody _rigidbody;
     Vector3 _start_pos;
     float TimeAccu = 0.0f;
-
     bool bReplaying = false;
+
+    void Jump()
+    {
+        _rigidbody.AddForce(10.0f * transform.up, ForceMode.Impulse);
+       
+        //my_state = PlayerState.JUMPING;
+    }
+
+    void ActivateSpecialAbility()
+    {
+        // Perform any actions related to the special ability
+        // For example, give the player increased speed, double jump, etc.
+        // ...
+
+        // Change the player state to SPECIAL_ABILITY
+        my_state = PlayerState.SPECIAL_ABILITY;
+        StartCoroutine(SpecialAbilityEffect(1.3333f, 4.0f));
+    }
+
+    IEnumerator SpecialAbilityEffect(float scaleMultiplier, float duration)
+    {
+        //// Adjust the scale multiplier and duration as needed
+        //float scaleMultiplier = 1.6666f;
+        //float duration = 10.0f;
+        //float shakeMagnitude = 0.5f;
+
+        // Save the initial scale to revert after the special ability
+        Vector3 initialScale = transform.localScale;
+
+        // Apply the scale multiplier
+        transform.localScale *= scaleMultiplier;
+
+        // Start the shaking effect
+        StartCoroutine(ShakeEffect(0.5f, duration));
+
+        // Wait for the specified duration
+        yield return new WaitForSeconds(duration);
+
+        // Revert the scale to the initial state
+        transform.localScale = initialScale;
+
+        // Optionally, you can perform any other cleanup or post-special-ability logic here
+       
+    }
+
+    IEnumerator ShakeEffect(float magnitude, float duration)
+    {
+        // Save the initial position to revert after the shaking effect
+        Vector3 initialPosition = transform.position;
+
+        float elapsed = 0.0f;
+
+        while (elapsed < duration)
+        {
+            // Generate a random offset within the specified magnitude
+            Vector3 offset = new Vector3(UnityEngine.Random.Range(-1f, 1f), 0, UnityEngine.Random.Range(-1f, 1f)) * magnitude;
+
+            // Apply the offset to the position
+            transform.position = initialPosition + offset;
+
+            // Wait for the next frame
+            yield return null;
+
+            elapsed += Time.deltaTime;
+        }
+
+        // Revert the position to the initial state
+        transform.position = initialPosition;
+        my_state = PlayerState.STANDING;
+    }
+
 
     // Commands:
     Command cmd_W = new MoveForwardCommand();
@@ -67,6 +238,11 @@ public class PlayerController : MonoBehaviour
         {  
             Destroy(other.gameObject); // Destroy the enemy!
         }
+        else if (other.CompareTag("SpecialItem"))
+        {
+            Destroy(other.gameObject); // Destroy the special pickup
+            ActivateSpecialAbility(); // Activate the special ability
+        }
 
     } //*
 
@@ -105,6 +281,7 @@ public class PlayerController : MonoBehaviour
         else
         {
 
+            handleInput();
             if (Input.GetKeyDown(KeyCode.R))
             {
                 bReplaying = true;
@@ -150,10 +327,16 @@ public class PlayerController : MonoBehaviour
                 _redo_commands.Clear();
                 //_last_command = cmd_D;
             }
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                _rigidbody.AddForce(10.0f * transform.up, ForceMode.Impulse);
-            }
+            //if (Input.GetKeyDown(KeyCode.Space))
+            //{
+
+            //   if (my_state == PlayerState.STANDING)
+            //   {
+            //        Jump();
+            //   }
+            //}
+
+            //CROUCH (no jumping while down)
 
             if (Input.GetKeyDown(KeyCode.Z))
             {
